@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: bf0a7979f8f3d354abf471689aac7667
+timeCreated: 1431739036
+licenseType: Pro
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences:
+  - barAsset: {fileID: 21300000, guid: 9fda84a5332b0df4f92f702ebd12a44d, type: 3}
+  - noteAsset: {fileID: 21300000, guid: d05a710b52717fd4aa143cc1b8dec426, type: 3}
+  - glowAsset: {fileID: 21300000, guid: c9d624335eee6c54ab07ac492a895be6, type: 3}
+  - note: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
