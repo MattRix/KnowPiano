@@ -7,7 +7,10 @@ public class Teacher : MonoBehaviour
 {
 	const float SPREADY = 1f;
 	const float SCALEX = 10f;
-	const float TIME_TO_SELECT = 0.5f;
+	const float TIME_TO_SELECT = 0.1f;
+	const float SPREADX = 1.5f;
+	const int TOTAL_TARGETS = 8;
+	const int FUTURE_TARGETS = 4;
 
 	public Sprite barAsset;
 	public Sprite noteAsset;
@@ -18,15 +21,18 @@ public class Teacher : MonoBehaviour
 
 	public List<NoteGlow> glows = new List<NoteGlow>();
 
-	internal SpriteRenderer note;
+	public List<NoteTarget> targets = new List<NoteTarget>();
 
 	public float MIDDLEY;
 
-	public float noteEnergy = 0f;
-	public int noteOffset = 0;
-	public int baseNote = 0;
-
 	public AudioClip middleCClip; 
+
+	public int baseNote = 0;
+	public float scrollX = 0;
+	public float scrollXTarget = 0;
+	public int targetIndex = 0;
+
+	public bool hasPressedDown = false;
 
 
 	//https://github.com/keijiro/unity-midi-bridge
@@ -56,14 +62,6 @@ public class Teacher : MonoBehaviour
 			bars.Add(bar);
 		}
 
-		var noteGO = new GameObject("Note");
-		noteGO.transform.parent = transform;
-
-		note = noteGO.AddComponent<SpriteRenderer>();
-		note.sprite = noteAsset;
-
-		note.transform.localPosition = new Vector3(0,0,0);
-
 		for(int i = 0; i<5; i++)
 		{
 			var glowGO = new GameObject("Glow");
@@ -84,6 +82,39 @@ public class Teacher : MonoBehaviour
 
 			glows.Add(glow);
 		}
+	}
+
+	NoteTarget CreateTarget()
+	{
+		var targetGO = new GameObject("NoteTarget");
+		targetGO.transform.parent = transform;
+
+		var target = targetGO.AddComponent<NoteTarget>();
+
+		target.renderer = targetGO.AddComponent<SpriteRenderer>();
+		target.renderer.sprite = noteAsset;
+		
+		target.transform.localPosition = new Vector3(0,0,0);
+
+		targets.Add(target);
+
+		if(UnityEngine.Random.Range(0,1.0f) < 0.2f)
+		{
+			baseNote = UnityEngine.Random.Range(-10,10);
+		}
+
+		target.offsetFromMiddleC = GetOffsetFromMiddleC(60 + baseNote + UnityEngine.Random.Range(-5,5));
+
+		target.baseX = targetIndex * SPREADX;
+		target.baseY = MIDDLEY+(float)target.offsetFromMiddleC*SPREADY/2f;
+
+		targetIndex++;
+
+		target.energy = TIME_TO_SELECT;
+
+		target.renderer.color = Color.grey;
+
+		return target;
 	}
 	
 	// Update is called once per frame
@@ -106,6 +137,8 @@ public class Teacher : MonoBehaviour
 
 			if(MidiInput.GetKeyDown(i))
 			{
+				hasPressedDown = true;
+
 				foreach(var glow in glows)
 				{
 					if(glow.note == -1)
@@ -133,48 +166,94 @@ public class Teacher : MonoBehaviour
 			}
 		}
 
-		if(noteEnergy <= 0)
-		{
-			noteEnergy = TIME_TO_SELECT;
-			if(UnityEngine.Random.Range(0,1.0f) < 0.2f)
-			{
-				baseNote = UnityEngine.Random.Range(-10,10);
-			}
+		NoteTarget currentTarget = null;
+		int futureTargets = 0;
 
-			noteOffset = GetOffsetFromMiddleC(60 + baseNote + UnityEngine.Random.Range(-5,5));
-			note.transform.localPosition = new Vector3(0,MIDDLEY+(float)noteOffset*SPREADY/2f,0);
+		for(int r = 0; r<targets.Count; r++)
+		{
+			var target = targets[r];
+			//remove far left targets here
+
+			if(targets.Count > TOTAL_TARGETS)
+			{
+				targets.Remove(target);
+				target.Remove();
+				r--;
+			}
+			else 
+			{
+				if(!target.hasBeenPlayed)
+				{
+					if(currentTarget == null)
+					{
+						currentTarget = target;
+					}
+					else 
+					{
+						futureTargets++;
+					}
+				}
+			}
+		}
+
+		if(currentTarget == null)
+		{
+			currentTarget = CreateTarget();
+		}
+
+		while(futureTargets < FUTURE_TARGETS)
+		{
+			CreateTarget();
+			futureTargets++;
 		}
 
 		bool wasNoteTouched = false;
-		
-		foreach(var glow in glows)
+
+		if(hasPressedDown) //must press before we start to touch the note
 		{
-			if(glow.note != -1 && glow.offsetFromMiddleC == noteOffset)
+			foreach(var glow in glows)
 			{
-				noteEnergy -= Time.deltaTime;
-				wasNoteTouched = true;
+				if(glow.note != -1 && glow.offsetFromMiddleC == currentTarget.offsetFromMiddleC)
+				{
+					currentTarget.energy -= Time.deltaTime;
+					wasNoteTouched = true;
+				}
 			}
 		}
 
 		if(wasNoteTouched)
 		{
-			note.color = Color.green;
+			currentTarget.renderer.color = Color.green;
 		}
 		else
 		{
-			note.color = Color.white;
-			noteEnergy = TIME_TO_SELECT;
+			currentTarget.renderer.color = Color.white;
+			currentTarget.energy = TIME_TO_SELECT;
 		}
 
+
+		if(currentTarget.energy <= 0) //played the note!
+		{
+			currentTarget.hasBeenPlayed = true;
+			scrollXTarget -= SPREADX; //scroll timeline
+			hasPressedDown = false;
+		}
+
+		scrollX += (scrollXTarget-scrollX) * 0.1f; //ease towards scroll target
+
+		foreach(var target in targets)
+		{
+			target.transform.localPosition = new Vector3(scrollX + target.baseX, target.baseY,0);
+		}
 	}
 
-	public int GetOffsetFromMiddleC(int noteIndex)
+	static public int GetOffsetFromMiddleC(int noteIndex)
 	{
 		int middleC = GetRangeIndex(60); //60 is middle C
 		return GetRangeIndex(noteIndex) - middleC;
 	}
 
-	public int GetRangeIndex(int noteIndex)
+	static public int GetRangeIndex(int noteIndex)
 	{
 		int[] range = QMusicScale.GetFullRangeNotes(0,QMusicScale.MAJOR);
 		
